@@ -81,16 +81,25 @@ const client = new Client({
     puppeteer: puppeteerOpts
 });
 
+// Estado de WhatsApp
+let latestQrString = '';
+let isWhatsAppConnected = false;
+
 // Mostrar código QR en la consola
 client.on('qr', (qr) => {
+    latestQrString = qr;
+    isWhatsAppConnected = false;
     console.log("\n==============================================================================");
-    console.log("📱 ESCANEA ESTE CÓDIGO QR DESDE TU WHATSAPP (Ajustes -> Dispositivos vinculados):");
+    console.log("📱 ESCANEA CÓDIGO QR WHATSAPP (Si las líneas se cortan en logs, presiona Ctrl y - para alejar el zoom):");
+    console.log("🌐 O ABRE LA URL DE TU RENDER (https://autochat-bot.onrender.com) PARA VER EL QR EN WEB.");
     console.log("==============================================================================\n");
     qrcode.generate(qr, { small: true });
 });
 
 // Confirmación de conexión exitosa
 client.on('ready', () => {
+    isWhatsAppConnected = true;
+    latestQrString = '';
     console.log("\n==============================================================================");
     console.log("✅ ¡CONEXIÓN EXITOSA CON TU WHATSAPP REAL!");
     console.log("🤖 AutoChat Cuba está activo y respondiendo a tus clientes 24/7.");
@@ -240,13 +249,21 @@ client.on('message', async msg => {
     }
 });
 
-// Servidor HTTP ligero para Render (pasa el chequeo de puerto 10000 / PORT)
+// Servidor HTTP ligero para Render (pasa el chequeo de puerto 10000 / PORT y muestra QR en web)
 try {
     const express = require('express');
     const httpApp = express();
     const HTTP_PORT = process.env.PORT || 10000;
-    httpApp.get('/', (req, res) => res.send('🤖 Bot AutoChat Cuba de WhatsApp en línea 24/7'));
-    httpApp.get('/health', (req, res) => res.json({ status: 'ok', whatsapp: 'online' }));
+    httpApp.get('/', (req, res) => {
+        if (isWhatsAppConnected) {
+            res.send('<!DOCTYPE html><html><head><title>AutoChat Cuba - Activo</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f172a;color:#f8fafc;text-align:center;padding:20px;}.card{background:#1e293b;padding:30px;border-radius:16px;box-shadow:0 10px 25px rgba(0,0,0,0.5);max-width:400px;width:100%;border:1px solid #334155;}h1{font-size:22px;color:#34d399;margin:0 0 10px 0;}p{font-size:14px;color:#94a3b8;line-height:1.5;}</style></head><body><div class="card"><h1>✅ Bot WhatsApp Activo 24/7</h1><p>AutoChat Cuba está conectado correctamente y respondiendo a tus clientes en automático.</p></div></body></html>');
+        } else if (latestQrString) {
+            res.send('<!DOCTYPE html><html><head><title>Vincular WhatsApp - AutoChat Cuba</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script><style>body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f172a;color:#f8fafc;text-align:center;padding:20px;}.card{background:#1e293b;padding:30px;border-radius:16px;box-shadow:0 10px 25px rgba(0,0,0,0.5);max-width:400px;width:100%;border:1px solid #334155;}canvas{background:white;padding:15px;border-radius:12px;margin:20px 0;max-width:100%;}h1{font-size:20px;color:#38bdf8;margin:0 0 10px 0;}p{font-size:13px;color:#94a3b8;line-height:1.5;}.notice{font-size:12px;color:#f59e0b;margin-top:15px;}</style></head><body><div class="card"><h1>📱 Vincular WhatsApp AutoChat</h1><p>Abre WhatsApp en tu teléfono ➔ <b>Ajustes / Dispositivos vinculados</b> ➔ <b>Vincular un dispositivo</b> y escanea este código:</p><canvas id="qrCanvas"></canvas><div class="notice">🔄 La página se actualiza automáticamente cada 10 segundos.</div></div><script>QRCode.toCanvas(document.getElementById("qrCanvas"), ' + JSON.stringify(latestQrString) + ', { width: 260 }, function (error) { if (error) console.error(error); }); setTimeout(() => location.reload(), 10000);</script></body></html>');
+        } else {
+            res.send('<!DOCTYPE html><html><head><title>AutoChat Cuba</title><meta http-equiv="refresh" content="5"><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f172a;color:#f8fafc;text-align:center;}</style></head><body><div><h2>🤖 Generando Código QR de WhatsApp...</h2><p>Por favor espera unos segundos y esta página se actualizará sola.</p></div></body></html>');
+        }
+    });
+    httpApp.get('/health', (req, res) => res.json({ status: 'ok', whatsapp: isWhatsAppConnected ? 'online' : 'waiting_qr' }));
     httpApp.listen(HTTP_PORT, () => {
         console.log('🌐 Servidor HTTP para Render activo en el puerto ' + HTTP_PORT);
     });
