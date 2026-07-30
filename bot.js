@@ -240,4 +240,18 @@ client.on('message', async msg => {
     }
 });
 
+// Servidor HTTP ligero para Render (pasa el chequeo de puerto 10000 / PORT)
+try {
+    const express = require('express');
+    const httpApp = express();
+    const HTTP_PORT = process.env.PORT || 10000;
+    httpApp.get('/', (req, res) => res.send('🤖 Bot AutoChat Cuba de WhatsApp en línea 24/7'));
+    httpApp.get('/health', (req, res) => res.json({ status: 'ok', whatsapp: 'online' }));
+    httpApp.listen(HTTP_PORT, () => {
+        console.log('🌐 Servidor HTTP para Render activo en el puerto ' + HTTP_PORT);
+    });
+} catch (eHttp) {
+    console.log('Servidor HTTP secundario omitido.');
+}
+
 client.initialize();
