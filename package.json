@@ -1,0 +1,15 @@
+{
+  "name": "autochat-cuba-bot",
+  "version": "1.0.0",
+  "description": "Bot de WhatsApp 24/7 para Render / Cloud",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "^1.26.0",
+    "qrcode-terminal": "^0.12.0",
+    "node-fetch": "^2.6.7",
+    "express": "^4.18.2"
+  }
+}
