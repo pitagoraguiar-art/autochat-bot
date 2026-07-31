@@ -230,23 +230,51 @@ ${KNOWLEDGE_CONTEXT}
 
 // Escuchar y responder mensajes de clientes automáticamente
 client.on('message', async msg => {
-    if (msg.from.includes('@g.us') || msg.fromMe || msg.from === 'status@broadcast') return;
+    try {
+        if (msg.from.includes('@g.us') || msg.from === 'status@broadcast') return;
 
-    const clienteTelefono = msg.from.replace('@c.us', '').replace('@lid', '').replace('+', '');
-    const mensajeTexto = msg.body;
+        // Si el mensaje lo envía el propio teléfono vinculado (fromMe), ignoramos para no responderse a sí mismo en bucle,
+        // a menos que envíe "!test" o "ping" para probar que el bot funciona.
+        if (msg.fromMe) {
+            if (msg.body && (msg.body.toLowerCase().startsWith('!test') || msg.body.toLowerCase() === 'ping')) {
+                console.log("🧪 [Prueba propia detectada]: Respondiendo a !test...");
+                await client.sendMessage(msg.to || msg.from, "🤖 *AutoChat Cuba*: ¡Conexión exitosa! El bot está activo y listo para responder automáticamente a todos tus clientes.");
+            }
+            return;
+        }
 
-    if (!mensajeTexto || mensajeTexto.trim() === '') return;
+        const clienteTelefono = msg.from.replace('@c.us', '').replace('@lid', '').replace('+', '');
+        const mensajeTexto = msg.body;
 
-    console.log("📩 [WhatsApp] Cliente (+" + clienteTelefono + "): " + mensajeTexto);
+        if (!mensajeTexto || mensajeTexto.trim() === '') return;
 
-    const respuestaIA = await consultarCerebroIA(clienteTelefono, mensajeTexto);
+        console.log("📩 [WhatsApp] Cliente (+" + clienteTelefono + "): " + mensajeTexto);
 
-    if (respuestaIA) {
-        console.log("💬 [AutoChat IA]: " + respuestaIA);
-        await msg.reply(respuestaIA);
-    } else {
-        console.log("⚠️ No se pudo obtener respuesta.");
+        const respuestaIA = await consultarCerebroIA(clienteTelefono, mensajeTexto);
+
+        if (respuestaIA) {
+            console.log("💬 [AutoChat IA]: " + respuestaIA);
+            try {
+                await msg.reply(respuestaIA);
+            } catch (replyErr) {
+                await client.sendMessage(msg.from, respuestaIA);
+            }
+        } else {
+            console.log("⚠️ No se pudo obtener respuesta.");
+        }
+    } catch (err) {
+        console.error("❌ Error procesando mensaje de WhatsApp:", err);
     }
+});
+
+// También escuchar message_create para permitir pruebas desde el propio teléfono con !test
+client.on('message_create', async msg => {
+    try {
+        if (msg.fromMe && msg.body && (msg.body.toLowerCase().startsWith('!test') || msg.body.toLowerCase() === 'ping')) {
+            console.log("🧪 [Prueba propia message_create]: Respondiendo...");
+            await client.sendMessage(msg.to, "🤖 *AutoChat Cuba*: ¡Conexión exitosa! El bot está activo y listo para responder automáticamente a todos tus clientes.");
+        }
+    } catch (err) {}
 });
 
 // Servidor HTTP ligero para Render (pasa el chequeo de puerto 10000 / PORT y muestra QR en web)
