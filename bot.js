@@ -96,29 +96,33 @@ const client = new Client({
 let latestQrString = '';
 let isWhatsAppConnected = false;
 
-// Mostrar código QR en la consola
+// Eventos de estado de WhatsApp (Logs limpios sin bloques QR)
 client.on('qr', (qr) => {
     latestQrString = qr;
     isWhatsAppConnected = false;
-    console.log("\n==============================================================================");
-    console.log("📱 ESCANEA CÓDIGO QR WHATSAPP (Si las líneas se cortan en logs, presiona Ctrl y - para alejar el zoom):");
-    console.log("🌐 O ABRE LA URL DE TU RENDER (https://autochat-bot.onrender.com) PARA VER EL QR EN WEB.");
-    console.log("==============================================================================\n");
-    qrcode.generate(qr, { small: true });
+    console.log("⚠️ [ESTADO ESTABLECIDO]: WHATSAPP NO ESTÁ VINCULADO");
+    console.log("👉 Por favor abre tu URL de Render para escanear el QR: https://autochat-bot.onrender.com");
 });
 
-// Confirmación de conexión exitosa
+client.on('authenticated', () => {
+    console.log("🔐 [ESTADO]: Sesión de WhatsApp Autenticada.");
+});
+
 client.on('ready', () => {
     isWhatsAppConnected = true;
     latestQrString = '';
-    console.log("\n==============================================================================");
-    console.log("✅ ¡CONEXIÓN EXITOSA CON TU WHATSAPP REAL!");
-    console.log("🤖 AutoChat Cuba está activo y respondiendo a tus clientes 24/7.");
-    console.log("==============================================================================\n");
+    console.log("✅ [ESTADO]: ¡WHATSAPP VINCULADO Y CONECTADO EXITOSAMENTE!");
+    console.log("🤖 AutoChat Cuba está activo y respondiendo mensajes automáticamente.");
 });
 
 client.on('auth_failure', msg => {
-    console.error('❌ Error de autenticación:', msg);
+    isWhatsAppConnected = false;
+    console.error('❌ [ESTADO ERROR]: Fallo de autenticación en WhatsApp:', msg);
+});
+
+client.on('disconnected', (reason) => {
+    isWhatsAppConnected = false;
+    console.log('🔌 [ESTADO]: WhatsApp Desconectado. Razón:', reason);
 });
 
 // Consulta multinivel al Cerebro IA
