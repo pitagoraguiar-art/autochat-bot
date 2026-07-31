@@ -52,7 +52,7 @@ for (const ruta of posiblesRutasChrome) {
     }
 }
 
-// Configuración de Puppeteer
+// Configuración de Puppeteer ultra optimizada para Render (banco de memoria reducido a <150MB)
 const puppeteerOpts = {
     headless: true,
     args: [
@@ -62,7 +62,14 @@ const puppeteerOpts = {
         '--disable-accelerated-2d-canvas',
         '--no-first-run',
         '--no-zygote',
-        '--disable-gpu'
+        '--disable-gpu',
+        '--single-process',
+        '--disable-extensions',
+        '--disable-component-update',
+        '--disable-default-apps',
+        '--mute-audio',
+        '--no-default-browser-check',
+        '--js-flags="--max-old-space-size=256"'
     ]
 };
 if (chromePath) puppeteerOpts.executablePath = chromePath;
@@ -75,12 +82,12 @@ try {
     if (fs.existsSync(lock2)) fs.unlinkSync(lock2);
 } catch (errClean) {}
 
-// Inicializar cliente de WhatsApp con sesión guardada
+// Inicializar cliente de WhatsApp con versión web estable y estrategia local/remota
 const client = new Client({
     authStrategy: new LocalAuth({ dataPath: './sesion_whatsapp' }),
     webVersionCache: {
         type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018944800-alpha.html'
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
     },
     puppeteer: puppeteerOpts
 });
@@ -232,54 +239,67 @@ ${KNOWLEDGE_CONTEXT}
     return "¡Hola! 👋 Gracias por escribirnos a *" + RAW_BUSINESS.name + "*.\n\n📋 *AQUÍ TIENES NUESTRO MENÚ Y PRECIOS:*\n\n" + KNOWLEDGE_CONTEXT;
 }
 
-// Escuchar y responder mensajes de clientes automáticamente
-client.on('message', async msg => {
+// Registro de IDs procesados para evitar duplicación entre 'message' y 'message_create'
+const processedMsgIds = new Set();
+
+async function procesarMensajeEntrante(msg) {
     try {
+        if (!msg || !msg.id || !msg.id._serialized) return;
+
+        // Si ya procesamos este mensaje exacto, ignorarlo
+        if (processedMsgIds.has(msg.id._serialized)) return;
+        processedMsgIds.add(msg.id._serialized);
+
+        // Mantener el caché pequeño (máx 500 IDs)
+        if (processedMsgIds.size > 500) {
+            const firstItem = processedMsgIds.values().next().value;
+            processedMsgIds.delete(firstItem);
+        }
+
+        // Ignorar chats grupales y estados
         if (msg.from.includes('@g.us') || msg.from === 'status@broadcast') return;
 
-        // Si el mensaje lo envía el propio teléfono vinculado (fromMe), ignoramos para no responderse a sí mismo en bucle,
-        // a menos que envíe "!test" o "ping" para probar que el bot funciona.
+        const mensajeTexto = msg.body;
+        if (!mensajeTexto || mensajeTexto.trim() === '') return;
+
+        // Si el mensaje viene del propio teléfono vinculado (fromMe)
         if (msg.fromMe) {
-            if (msg.body && (msg.body.toLowerCase().startsWith('!test') || msg.body.toLowerCase() === 'ping')) {
-                console.log("🧪 [Prueba propia detectada]: Respondiendo a !test...");
+            const lowBody = mensajeTexto.toLowerCase().trim();
+            if (lowBody === '!test' || lowBody === 'ping' || lowBody === 'hola test' || lowBody.startsWith('!test')) {
+                console.log("🧪 [Prueba propia en teléfono vinculado]: Respondiendo a !test...");
                 await client.sendMessage(msg.to || msg.from, "🤖 *AutoChat Cuba*: ¡Conexión exitosa! El bot está activo y listo para responder automáticamente a todos tus clientes.");
             }
             return;
         }
 
-        const clienteTelefono = msg.from.replace('@c.us', '').replace('@lid', '').replace('+', '');
-        const mensajeTexto = msg.body;
+        // Extraer teléfono limpio del cliente
+        const clienteTelefono = msg.from.replace('@c.us', '').replace('@lid', '').replace('+', '').replace(/[^0-9]/g, '');
+        console.log("📩 [WhatsApp] ¡NUEVO MENSAJE DE CLIENTE RECIBIDO! (+" + clienteTelefono + "): " + mensajeTexto);
 
-        if (!mensajeTexto || mensajeTexto.trim() === '') return;
-
-        console.log("📩 [WhatsApp] Cliente (+" + clienteTelefono + "): " + mensajeTexto);
-
+        // Consultar el motor de inteligencia artificial (Tier 1 Gemini API -> Tier 2 API -> Tier 3 Local Engine)
         const respuestaIA = await consultarCerebroIA(clienteTelefono, mensajeTexto);
 
         if (respuestaIA) {
-            console.log("💬 [AutoChat IA]: " + respuestaIA);
+            console.log("💬 [AutoChat IA Responde a +" + clienteTelefono + "]: " + respuestaIA);
             try {
                 await msg.reply(respuestaIA);
+                console.log("✅ [Respuesta enviada con éxito vía msg.reply]");
             } catch (replyErr) {
+                console.log("⚠️ msg.reply falló, reintentando con client.sendMessage...");
                 await client.sendMessage(msg.from, respuestaIA);
+                console.log("✅ [Respuesta enviada con éxito vía client.sendMessage]");
             }
         } else {
-            console.log("⚠️ No se pudo obtener respuesta.");
+            console.log("⚠️ No se pudo obtener respuesta del Cerebro IA.");
         }
     } catch (err) {
         console.error("❌ Error procesando mensaje de WhatsApp:", err);
     }
-});
+}
 
-// También escuchar message_create para permitir pruebas desde el propio teléfono con !test
-client.on('message_create', async msg => {
-    try {
-        if (msg.fromMe && msg.body && (msg.body.toLowerCase().startsWith('!test') || msg.body.toLowerCase() === 'ping')) {
-            console.log("🧪 [Prueba propia message_create]: Respondiendo...");
-            await client.sendMessage(msg.to, "🤖 *AutoChat Cuba*: ¡Conexión exitosa! El bot está activo y listo para responder automáticamente a todos tus clientes.");
-        }
-    } catch (err) {}
-});
+// Escuchar TANTO 'message' COMO 'message_create' para garantizar 100% de captura en WhatsApp Web Multi-Dispositivo (MD)
+client.on('message', procesarMensajeEntrante);
+client.on('message_create', procesarMensajeEntrante);
 
 // Servidor HTTP ligero para Render (pasa el chequeo de puerto 10000 / PORT y muestra QR en web)
 try {
