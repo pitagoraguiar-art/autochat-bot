@@ -78,6 +78,10 @@ try {
 // Inicializar cliente de WhatsApp con sesión guardada
 const client = new Client({
     authStrategy: new LocalAuth({ dataPath: './sesion_whatsapp' }),
+    webVersionCache: {
+        type: 'remote',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018944800-alpha.html'
+    },
     puppeteer: puppeteerOpts
 });
 
@@ -295,6 +299,19 @@ try {
     httpApp.get('/health', (req, res) => res.json({ status: 'ok', whatsapp: isWhatsAppConnected ? 'online' : 'waiting_qr' }));
     httpApp.listen(HTTP_PORT, () => {
         console.log('🌐 Servidor HTTP para Render activo en el puerto ' + HTTP_PORT);
+        
+        // Auto-KeepAlive para Render (evita que el servidor gratuito de Render se duerma a los 15 min de inactividad)
+        setInterval(() => {
+            try {
+                const http = require('http');
+                const https = require('https');
+                const renderUrl = process.env.RENDER_EXTERNAL_URL || ('http://localhost:' + HTTP_PORT);
+                const protocol = renderUrl.startsWith('https') ? https : http;
+                protocol.get(renderUrl + '/health', (res) => {
+                    // Mantener contenedor despierto en Render
+                }).on('error', () => {});
+            } catch (ePing) {}
+        }, 3 * 60 * 1000); // Cada 3 minutos
     });
 } catch (eHttp) {
     console.log('Servidor HTTP secundario omitido.');
