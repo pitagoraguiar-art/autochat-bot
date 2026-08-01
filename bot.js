@@ -52,7 +52,7 @@ for (const ruta of posiblesRutasChrome) {
     }
 }
 
-// Configuración de Puppeteer optimizada para Render
+// Configuración de Puppeteer optimizada para Render (Ahorro extremo de memoria RAM < 200MB)
 const puppeteerOpts = {
     headless: true,
     args: [
@@ -67,7 +67,10 @@ const puppeteerOpts = {
         '--disable-component-update',
         '--disable-default-apps',
         '--mute-audio',
-        '--no-default-browser-check'
+        '--no-default-browser-check',
+        '--disable-site-isolation-trials',
+        '--disable-web-security',
+        '--js-flags=--max-old-space-size=256'
     ]
 };
 if (chromePath) puppeteerOpts.executablePath = chromePath;
@@ -102,15 +105,82 @@ try {
 
     httpApp.get('/health', (req, res) => res.json({ status: 'ok', whatsapp: isWhatsAppConnected ? 'online' : 'waiting_qr' }));
 
+    // Endpoint API para polling fluido en tiempo real
+    httpApp.get('/api/qr-status', (req, res) => {
+        res.json({
+            connected: isWhatsAppConnected,
+            qr: latestQrString,
+            qrUrl: latestQrString ? ('https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(latestQrString)) : ''
+        });
+    });
+
     const renderQrHtml = (req, res) => {
-        if (isWhatsAppConnected) {
-            res.send('<!DOCTYPE html><html><head><title>AutoChat Cuba - Activo</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f172a;color:#f8fafc;text-align:center;padding:20px;}.card{background:#1e293b;padding:30px;border-radius:16px;box-shadow:0 10px 25px rgba(0,0,0,0.5);max-width:420px;width:100%;border:1px solid #334155;}h1{font-size:22px;color:#34d399;margin:0 0 10px 0;}p{font-size:14px;color:#94a3b8;line-height:1.5;}.status{display:inline-block;padding:6px 16px;border-radius:20px;background:#064e3b;color:#34d399;font-weight:bold;margin-bottom:15px;}</style></head><body><div class="card"><div class="status">● BOT CONECTADO</div><h1>✅ Bot WhatsApp Activo 24/7</h1><p>AutoChat Cuba está conectado correctamente y respondiendo a tus clientes en automático.</p></div></body></html>');
-        } else if (latestQrString) {
-            const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(latestQrString);
-            res.send('<!DOCTYPE html><html><head><title>Vincular WhatsApp - AutoChat Cuba</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f172a;color:#f8fafc;text-align:center;padding:20px;}.card{background:#1e293b;padding:30px;border-radius:16px;box-shadow:0 10px 25px rgba(0,0,0,0.5);max-width:420px;width:100%;border:1px solid #334155;}img.qr-code{background:white;padding:12px;border-radius:12px;margin:20px 0;width:280px;height:280px;box-shadow:0 8px 20px rgba(0,0,0,0.4);}h1{font-size:20px;color:#38bdf8;margin:0 0 10px 0;}p{font-size:13px;color:#94a3b8;line-height:1.5;}.notice{font-size:12px;color:#f59e0b;margin-top:15px;font-weight:bold;}</style></head><body><div class="card"><h1>📱 Vincular WhatsApp AutoChat</h1><p>Abre WhatsApp en tu teléfono ➔ <b>Ajustes / Dispositivos vinculados</b> ➔ <b>Vincular un dispositivo</b> y escanea este código:</p><img class="qr-code" src="' + qrUrl + '" alt="Código QR WhatsApp" /><div class="notice">🔄 La página se actualiza automáticamente cada 8 segundos.</div></div><script>setTimeout(function(){ location.reload(); }, 8000);</script></body></html>');
-        } else {
-            res.send('<!DOCTYPE html><html><head><title>AutoChat Cuba</title><meta http-equiv="refresh" content="4"><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f172a;color:#f8fafc;text-align:center;}.card{background:#1e293b;padding:30px;border-radius:16px;border:1px solid #334155;max-width:400px;margin:auto;padding:20px;}</style></head><body><div class="card"><h2>🤖 Generando Código QR de WhatsApp...</h2><p>Por favor espera unos segundos y esta página se actualizará sola.</p></div></body></html>');
-        }
+        const html = '<!DOCTYPE html>' +
+'<html lang="es">' +
+'<head>' +
+'    <meta charset="UTF-8">' +
+'    <title>Vincular WhatsApp - AutoChat Cuba</title>' +
+'    <meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+'    <style>' +
+'        * { box-sizing: border-box; }' +
+'        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #0f172a; color: #f8fafc; text-align: center; padding: 20px; }' +
+'        .card { background: #1e293b; padding: 32px 24px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 440px; width: 100%; border: 1px solid #334155; transition: all 0.3s ease; }' +
+'        img.qr-code { background: white; padding: 14px; border-radius: 16px; margin: 20px 0; width: 280px; height: 280px; box-shadow: 0 8px 20px rgba(0,0,0,0.4); }' +
+'        h1 { font-size: 22px; color: #38bdf8; margin: 0 0 12px 0; font-weight: 700; }' +
+'        p { font-size: 14px; color: #94a3b8; line-height: 1.5; margin: 8px 0; }' +
+'        .status-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; border-radius: 20px; font-weight: 700; font-size: 14px; margin-bottom: 16px; }' +
+'        .status-waiting { background: #451a03; color: #fbbf24; border: 1px solid #78350f; }' +
+'        .status-connected { background: #064e3b; color: #34d399; border: 1px solid #065f46; }' +
+'        .loading-spinner { width: 40px; height: 40px; border: 4px solid #334155; border-top: 4px solid #38bdf8; border-radius: 50%; animation: spin 1s linear infinite; margin: 30px auto; }' +
+'        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }' +
+'        .instructions { background: #0f172a; padding: 14px; border-radius: 12px; font-size: 13px; color: #cbd5e1; text-align: left; margin-top: 15px; border: 1px solid #1e293b; }' +
+'        .instructions ol { margin: 6px 0 0 20px; padding: 0; }' +
+'        .instructions li { margin-bottom: 4px; }' +
+'        .live-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; display: inline-block; animation: pulse 1.5s infinite; }' +
+'        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }' +
+'    </style>' +
+'</head>' +
+'<body>' +
+'    <div class="card" id="mainCard">' +
+'        <div id="content">' +
+'            <div class="loading-spinner"></div>' +
+'            <p>Iniciando WhatsApp Web en Render...</p>' +
+'        </div>' +
+'    </div>' +
+'    <script>' +
+'        let currentQr = "";' +
+'        let isConnected = false;' +
+'        async function checkStatus() {' +
+'            try {' +
+'                const res = await fetch("/api/qr-status");' +
+'                const data = await res.json();' +
+'                const container = document.getElementById("content");' +
+'                if (data.connected) {' +
+'                    if (!isConnected) {' +
+'                        isConnected = true;' +
+'                        container.innerHTML = '<div class="status-badge status-connected"><span class="live-dot"></span> BOT CONECTADO Y ACTIVO</div><h1 style="color: #34d399;">✅ ¡WhatsApp Vinculado con Éxito!</h1><p>AutoChat Cuba está sincronizado y respondiendo mensajes en automático 24/7 en tu teléfono.</p><p style="font-size: 12px; color: #64748b; margin-top: 15px;">Puedes cerrar esta ventana. El bot seguirá funcionando en segundo plano.</p>';' +
+'                    }' +
+'                } else if (data.qr) {' +
+'                    isConnected = false;' +
+'                    if (currentQr !== data.qr) {' +
+'                        currentQr = data.qr;' +
+'                        container.innerHTML = '<div class="status-badge status-waiting"><span class="live-dot"></span> ESPERANDO ESCÁNEO</div><h1>📱 Vincular WhatsApp AutoChat</h1><p>Escanea este código QR desde WhatsApp para conectar la Inteligencia Artificial:</p><img class="qr-code" src="' + data.qrUrl + '" alt="Código QR WhatsApp" /><div class="instructions"><b>Pasos en tu teléfono:</b><ol><li>Abre WhatsApp en tu teléfono.</li><li>Ve a <b>Ajustes</b> / <b>Dispositivos vinculados</b>.</li><li>Toca en <b>Vincular un dispositivo</b>.</li><li>Apunta con tu cámara hacia este código QR.</li></ol></div>';' +
+'                    }' +
+'                } else {' +
+'                    isConnected = false;' +
+'                    currentQr = "";' +
+'                    container.innerHTML = '<div class="loading-spinner"></div><h1>🤖 Generando Código QR...</h1><p>Iniciando el motor de WhatsApp Web en el servidor. Por favor espera unos segundos.</p>';' +
+'                }' +
+'            } catch (err) {' +
+'                console.error("Error verificando estado:", err);' +
+'            }' +
+'        }' +
+'        checkStatus();' +
+'        setInterval(checkStatus, 2000);' +
+'    </script>' +
+'</body>' +
+'</html>';
+        res.send(html);
     };
 
     httpApp.get('/', renderQrHtml);
@@ -132,8 +202,16 @@ client.on('qr', (qr) => {
     console.log("👉 Por favor abre tu URL de Render para escanear el QR en HD: https://autochat-bot.onrender.com");
 });
 
+client.on('loading_screen', (percent, message) => {
+    console.log("⏳ [CARGANDO WHATSAPP WEB]: " + percent + "% - " + message);
+});
+
+client.on('change_state', (state) => {
+    console.log("🔄 [CAMBIO DE ESTADO WHATSAPP]: " + state);
+});
+
 client.on('authenticated', () => {
-    console.log("🔐 [ESTADO]: Sesión de WhatsApp Autenticada.");
+    console.log("🔐 [ESTADO]: Sesión de WhatsApp Autenticada con éxito.");
 });
 
 client.on('ready', () => {
