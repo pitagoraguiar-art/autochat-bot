@@ -52,7 +52,15 @@ for (const ruta of posiblesRutasChrome) {
     }
 }
 
-// Configuración de Puppeteer optimizada para Render (Ahorro extremo de memoria RAM < 200MB)
+// Evitar que errores no capturados cierren el proceso en Render
+process.on('unhandledRejection', (reason) => {
+    console.error('⚠️ [ADVERTENCIA PROCESO]: Promesa rechazada ignorada:', reason);
+});
+process.on('uncaughtException', (err) => {
+    console.error('⚠️ [ADVERTENCIA PROCESO]: Excepción no capturada ignorada:', err);
+});
+
+// Configuración de Puppeteer optimizada para Render
 const puppeteerOpts = {
     headless: true,
     args: [
@@ -67,10 +75,7 @@ const puppeteerOpts = {
         '--disable-component-update',
         '--disable-default-apps',
         '--mute-audio',
-        '--no-default-browser-check',
-        '--disable-site-isolation-trials',
-        '--disable-web-security',
-        '--js-flags=--max-old-space-size=256'
+        '--no-default-browser-check'
     ]
 };
 if (chromePath) puppeteerOpts.executablePath = chromePath;
@@ -83,12 +88,11 @@ try {
     if (fs.existsSync(lock2)) fs.unlinkSync(lock2);
 } catch (errClean) {}
 
-// Inicializar cliente de WhatsApp con versión web estable y estrategia local/remota
+// Inicializar cliente de WhatsApp Web
 const client = new Client({
     authStrategy: new LocalAuth({ dataPath: './sesion_whatsapp' }),
     webVersionCache: {
-        type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018944800-alpha.html'
+        type: 'local'
     },
     puppeteer: puppeteerOpts
 });
